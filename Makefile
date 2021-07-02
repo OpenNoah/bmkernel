@@ -1,4 +1,4 @@
-SRC	= main.c
+SRC	= main.c uart.c wdt.c
 NAME	= bmImage
 
 TYPE	?= np1380
@@ -17,8 +17,8 @@ LD	:= $(CROSS)g++
 NM	:= $(CROSS)nm
 OBJCOPY	:= $(CROSS)objcopy
 
-CFLAGS	= -O3
-LDFLAGS	= -static -O3 -nostdlib -T kernel.ld
+CFLAGS	= -O3 -mno-abicalls -fno-pic -fno-pie
+LDFLAGS	= -static -O3 -nostdlib -mno-abicalls -fno-pic -fno-pie -T kernel.ld
 
 .SECONDARY:
 .DELETE_ON_ERROR:
@@ -47,7 +47,7 @@ $(NAME).elf: $(OBJ)
 
 CLEAN	+= $(OBJ)
 %.o: %.c
-	$(CC) -o $@ -c $<
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 $(MKPKG):
 	$(MAKE) -C mkpkg mkpkg

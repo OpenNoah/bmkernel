@@ -2,27 +2,6 @@
 #include "uart.h"
 #include "wdt.h"
 
-void uart_putc(hw_uart_t *uart, char c)
-{
-	while (!(uart->ULSR & (1 << 6)));	// TEMP
-	uart->UTHR = c;
-}
-
-void uart_puts(hw_uart_t *uart, const char *s)
-{
-	while (*s != '\0')
-		uart_putc(uart, *s++);
-}
-
-void uart_puthex(hw_uart_t *uart, uint32_t v, int w)
-{
-	for (int i = 0; i < w; i++) {
-		uint8_t fv = (v >> (4 * (w - 1 - i))) & 0xf;
-		char c = fv < 10 ? fv + '0' : fv + 'a' - 10;
-		uart_putc(uart, c);
-	}
-}
-
 static void reg_dump(hw_uart_t *uart)
 {
 	uart_puts(uart, "Register dump:\r\n");
@@ -51,29 +30,90 @@ static void reg_dump(hw_uart_t *uart)
 	}
 }
 
+static const char *get_hex_u32(const char *s, uint32_t *pv)
+{
+	uint32_t v = 0;
+	for (;;) {
+		char c = *s;
+		if (c == '\0')
+			break;
+		else if (c >= '0' && c < '9')
+			v = (v << 4) | (c - '0');
+		else if (c >= 'a' && c < 'f')
+			v = (v << 4) | (c - 'a' + 0xa);
+		else if (c >= 'A' && c < 'F')
+			v = (v << 4) | (c - 'A' + 0xa);
+		else if (c == 'x' || c == 'X')
+		else
+			break;
+		s++;
+	}
+	*pv = v;
+	return s;
+}
+
+static void mem_read_line(hw_uart_t *uart, const char *line)
+{
+	uint32_t addr = 0;
+	get_hex_u32(&line[2], &addr);
+	if (addr == 0)
+		return;
+	uint32_t v = *(uint32_t *)addr;
+	uart_puts(uart, "0x");
+	uart_puthex(uart, addr, 8);
+	uart_puts(uart, " = 0x");
+	uart_puthex(uart, v, 8);
+	uart_puts(uart, "\r\n");
+}
+
+static void mem_write_line(hw_uart_t *uart, const char *line)
+{
+	uint32_t addr = 0;
+	line = get_hex_u32(&line[2], &addr);
+	if (addr == 0 || *line++ == '\0')
+		return;
+	uint32_t v = 0;
+	get_hex_u32(line, &v);
+	*(uint32_t *)addr = v;
+
+	v = *(uint32_t *)addr;
+	uart_puts(uart, "0x");
+	uart_puthex(uart, addr, 8);
+	uart_puts(uart, " = 0x");
+	uart_puthex(uart, v, 8);
+	uart_puts(uart, "\r\n");
+}
+
 int main()
 {
 	hw_uart_t *uart = UART0_BASE;
-	uart->ULCR = 0b11;	// DLAB = 0, 8-bit
+	uart_init(uart);
 
 	uart_puts(uart, "Test kernel run!\r\n");
-	reg_dump(uart);
+	//reg_dump(uart);
 
 	for (;;) {
-		while (!(uart->ULSR & 1));
-		char c = uart->URBR;
-		uart_putc(uart, c);
-		if (c == '\r' || c == '\n')
+		uart_puts(uart, "> ");
+		char *line = uart_get_line(uart);
+		if (line[0] == 0)
+			continue;
+
+		switch (line[0]) {
+		case 'r':
+			mem_read_line(uart, line);
 			break;
+		case 'w':
+			mem_write_line(uart, line);
+			break;
+		case '*':
+			wdt_reset(uart);
+			break;
+		}
+		//uart_puts(uart, line);
+		//uart_puts(uart, "\r\n");
 	}
 
-	uart_puts(uart, "\r\nReset using WDT\r\n");
-	hw_wdt_t *wdt = WDT_BASE;
-	wdt->TCSR = 1;	// PCLK as clock input
-	wdt->TDR = 0;	// Reset on timer = 0
-	wdt->TCER = 1;	// Enable WDT
-	wdt->TCNT = 0;	// Timer set to 0
-
+	wdt_reset(uart);
 	return 0;
 }
 
