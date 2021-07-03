@@ -1,15 +1,15 @@
 /* Specify the memory areas */
 MEMORY
 {
-	RAM(xrw): ORIGIN = 0x80000000, LENGTH = 0x04000000
+	RAM(xrw):    ORIGIN = 0x81000000, LENGTH = 0x01000000
+	DMARAM(xrw): ORIGIN = 0xa3000000, LENGTH = 0x01000000
 }
 
 /* Entry Point */
-ENTRY(entry)
+ENTRY(_entry)
 
-/* Highest address of the user mode stack */
-__stack_end__ = 0x20010000;     /* end of DTCM */
-__heap_size__ = 16 * 1024;      /* Heap size 16k */
+__stack_size__ = 16 * 1024;
+__heap_size__  = 16 * 1024;
 
 /* Define output sections */
 SECTIONS
@@ -97,7 +97,19 @@ SECTIONS
 
   /* Heap section */
   . = ALIGN(4);
-  .heap :
+  .heap (NOLOAD) :
+  {
+    . = ALIGN(4);
+    __stack_start__ = .;
+    /* Reserve space */
+    . += __stack_size__;
+    . = ALIGN(4);
+    __stack_end__ = .;
+  } >RAM
+
+  /* Heap section */
+  . = ALIGN(4);
+  .heap (NOLOAD) :
   {
     . = ALIGN(4);
     __heap_start__ = .;
@@ -106,6 +118,14 @@ SECTIONS
     . = ALIGN(4);
     __heap_end__ = .;
   } >RAM
+
+  /* Special uncached DMA ram */
+  .dma (NOLOAD):
+  {
+    . = ALIGN(16);
+    *(.dma)
+    *(.dma*)
+  } >DMARAM
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

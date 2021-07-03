@@ -1,36 +1,11 @@
+#include "io.h"
 #include "uart.h"
 
 #define LINE_BUFFER_SIZE	32
 
-typedef struct hw_uart_t {
-	union {
-		struct {
-			union {
-				_I uint32_t URBR;
-				_O uint32_t UTHR;
-			};
-			_IO uint32_t UIER;
-		};
-		struct {
-			_IO uint32_t UDLLR;
-			_IO uint32_t UDLHR;
-		};
-	};
-	union {
-		_I uint32_t UIIR;
-		_O uint32_t UFCR;
-	};
-	_IO uint32_t ULCR;
-	_IO uint32_t UMCR;
-	_I uint32_t ULSR;
-	_I uint32_t UMSR;
-	_IO uint32_t USPR;
-	_IO uint32_t ISR;
-} hw_uart_t;
-
 void uart_init(hw_uart_t *uart)
 {
-	uart->ULCR = 0b11;	// DLAB = 0, 8-bit
+	uart->ULCR = 3;	// DLAB = 0, 8-bit
 }
 
 void uart_putc(hw_uart_t *uart, char c)
@@ -50,6 +25,20 @@ void uart_puthex(hw_uart_t *uart, uint32_t v, int w)
 	for (int i = 0; i < w; i++) {
 		uint8_t fv = (v >> (4 * (w - 1 - i))) & 0xf;
 		char c = fv < 10 ? fv + '0' : fv + 'a' - 10;
+		uart_putc(uart, c);
+	}
+}
+
+void uart_putdec(hw_uart_t *uart, uint32_t v)
+{
+	uint32_t base = 1000000000;
+	while (v && v / base == 0)
+		base /= 10;
+	while (base) {
+		uint32_t vv = v / base;
+		v -= vv * base;
+		base /= 10;
+		char c = vv + '0';
 		uart_putc(uart, c);
 	}
 }
